@@ -2,20 +2,36 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
-	"fmt"
+	"github.com/gofiber/fiber/v2"
+	"golang.org/x/crypto/bcrypt"
+	"hotel-reservation/db"
 	"hotel-reservation/types"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/gofiber/fiber/v2"
 )
 
-func makeTestUser() *types.User
-func TestAuthenticate(t *testing.T) {
+func insertTestUser(t *testing.T, store db.UserStore) *types.User {
+	encpw, err := bcrypt.GenerateFromPassword([]byte("supersecurepassword"), 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := &types.User{
+		FirstName:         "james",
+		LastName:          "foo",
+		Email:             "james@foo.com",
+		EncryptedPassword: string(encpw),
+	}
+	_, err = store.CreateUser(context.TODO(), user)
+	return user
+}
+
+func TestAuthenticateSuccess(t *testing.T) {
 	tdb := setup(t)
 	defer tdb.teardown(t)
+	insertTestUser(t, tdb.UserStore)
 
 	app := fiber.New()
 	authHandler := NewAuthHandler(tdb.UserStore)
@@ -27,7 +43,7 @@ func TestAuthenticate(t *testing.T) {
 	}
 	b, _ := json.Marshal(params)
 	req := httptest.NewRequest("POST", "/auth", bytes.NewReader(b))
-
+	req.Header.Add("content-type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatal(err)
@@ -37,7 +53,9 @@ func TestAuthenticate(t *testing.T) {
 	}
 	var authResp AuthResponse
 	if err = json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
-	fmt.Println(resp)
+	if authResp.Token == "" {
+		t.Fatalf("Expected the JWT token to be present in the auth response")
+	}
 }
