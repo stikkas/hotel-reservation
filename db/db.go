@@ -6,7 +6,7 @@ const (
 	DBURI      = "mongodb://localhost:27017"
 )
 
-type Stotre struct {
+type Store struct {
 	user  UserStore
 	hotel HotelStore
 	room  RoomStore
